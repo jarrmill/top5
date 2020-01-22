@@ -1,5 +1,5 @@
 {
-  "name": "Top 5",
+  "name": "top5",
   "version": "1.0.0",
   "author": "Jarrod Miller <jarrod.miller93@gmail.com>",
   "description": "The project was not created for the yuuvis hackathon",
@@ -11,7 +11,7 @@
   "scripts": {
     "start": "node server",
     "start:dev": "webpack-dev-server --color",
-    "build": "webpack -w --profile",
+    "build": "webpack",
     "launch": "npm run build & npm run start",
     "liftoff": "npm run start:dev & npm run build"
   },
