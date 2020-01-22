@@ -1,22 +1,18 @@
 const express = require('express');
-const fs = require('fs');
-const axios = require('axios');
 const path = require('path');
 const morgan = require('morgan');
 const cookieSession = require('cookie-session');
 const passport = require('passport');
 
 const verifyUser = require('./middleware/verifyUser');
-const sample_data = require('./pug/sample_data');
-const yuuvis = require('./helper_functions/yuuvis');
-const { createResume, getResumeByEmail } = require('./db/Controllers/Resume');
-const { genResume } = require('./helper_functions/pug');
+const db = require('./db/Controllers');
 
 require('dotenv').config();
 require('./db/config');
 
 const app = express();
 app.use(morgan('dev')); // Logs all inbound requests to console
+app.use(express.json());
 app.use(express.static('dist'));
 app.use(cookieSession({
   name: 'session',
@@ -29,77 +25,79 @@ require('./auth');
 app.use(passport.initialize());
 app.use(passport.session());
 
-
-app.get('/api/resume', verifyUser, express.json(), (req, res) => {
-  getResumeByEmail(req.user.email)
+app.get('/api/friends', verifyUser, (req, res) => {
+  db.User.findOrCreateUser(req.headers.email)
     .then((results) => {
-      if (results) {
-        const url = `https://api.yuuvis.io/dms-core/objects/${results[0].objectId}/contents/file`;
-        const key = process.env.API_KEY;
-        const headers = { headers: { 'Ocp-Apim-Subscription-Key': key } };
-        axios.get(url, headers)
-          .then((response) => {
-            res.json(response.data);
-          });
+      console.log('Found: ', results);
+      res.status(200).send(results);
+    })
+    .catch((error) => {
+      res.status(500).send({ error: 'db error' });
+    })
+});
+
+app.post('/api/friends', verifyUser, (req, res) => {
+  const friend = req.body;
+  db.User.getUserByEmail(req.user.email)
+    .then((results) => {
+      console.log('RESULTS, ', results);
+      let friends;
+      if (results.length && results[0].friends) {
+        friends = results[0].friends;
+        friends[friend.name] = {
+          name: friend.name,
+          weight: friend.weight,
+          date: friend.date,
+        };
       } else {
-        res.send({});
+        friends = {
+          [friend.name]:
+          {
+            name: friend.name,
+            weight: friend.weight,
+            date: friend.date,
+          }
+        };
       }
+      console.log('FRIENDS: ', req.user.email, friends);
+      db.User.updateUserFriends(req.user.email, friends)
+        .then(result => res.status(201).send(result))
+        .catch(error => res.status(500).send(error));
+    })
+    .catch((error) => {
+      console.log('Error in getUserByEmail', error);
+      res.status(500).send(error);
     });
 });
 
-app.post('/api/resume', verifyUser, express.json(), (req, res) => {
-  const { email, keywords } = req.body;
-  // we need to add a function that writes to resume.json
-  const resume = JSON.stringify(req.body.resume);
+app.delete('/api/user', verifyUser, (req, res) => {
+  db.User.deleteUser(req.user.email)
+    .then(() => res.status(201).send('It is done'))
+    .catch(() => res.status(500).send('Error'));
+})
 
-  fs.writeFile(path.join(__dirname, '/resume.json'), resume, (err) => {
-    if (err) throw err;
-    const docFileName = path.join(__dirname, '/resume.json');
-    const cid = 'cid_63apple';
-    const docMimeType = 'application/json';
-    const requestObject = yuuvis.createRequest(email, keywords, docFileName, cid, docMimeType);
+app.delete('/api/friends', verifyUser, (req, res) => {
+  console.log('Deleting friends!', req.headers.friend);
+  const friend = JSON.parse(req.headers.friend);
+  db.User.getUserByEmail(req.user.email)
+    .then((results) => {
+      if (results.length && results[0].friends) {
+        let friends = results[0].friends;
+        if (friends[friend.name]) {
+          delete friends[friend.name];
+        }
 
-    yuuvis.executeRequest(requestObject)
-      .then((responseBody) => {
-        const response = JSON.parse(responseBody);
-        const objectId = response.objects[0].properties['enaio:objectId'].value;
-        return createResume(req.user.email, objectId);
-      })
-      .then(() => {
-        res.send(201);
-      })
-      .catch((err) => {
-        console.log(err);
-      });
-  });
-});
-
-app.get('/api/pug', (req, res) => {
-  res.send(pug.renderFile(path.join(`${__dirname}/pug/template.pug`), sample_data));
-});
-
-app.get('/api/resume/download/', express.json(), (req, res) => {
-  const encodedResume = (req.query.r) ? req.query.r : undefined;
-  let resume = (encodedResume) ? Buffer.from(encodedResume, 'base64').toString('ascii') : JSON.stringify(sample_data.resume);
-  resume = JSON.parse(resume);
-  console.log(resume);
-  resume.work.map((exp) => {
-    exp.highlights = exp.highlights.split(',');
-    return exp;
-  });
-  resume.keywords = resume.keywords.split(',');
-  resume = JSON.stringify(resume);
-  genResume(resume).then((pugResume) => {
-    res.type('application/pdf');
-    res.send(pugResume);
-  });
-});
-
-app.post('/api/resume/download', express.json(), (req, res) => {
-  const { resume } = req.body;
-  genResume(resume)
-    .then((pugResume) => {
-      res.send(pugResume);
+        db.User.updateUserFriends(req.user.email, friends)
+          .then(result => res.status(201).send(result))
+          .catch(error => res.status(500).send(error));
+      }
+      else {
+        res.status(400).send();
+      }
+    })
+    .catch((error) => {
+      console.log('Error in getUserByEmail', error);
+      res.status(500).send(error);
     });
 });
 
@@ -137,55 +135,5 @@ app.get('/auth/user', (req, res) => {
   }
 });
 
-app.get('/api/resume/:keywords', (req, res) => {
-  const { keywords } = req.params;
-  const searches = keywords.split('&');
-  let searchString = '';
-
-  for (let i = 0; i < searches.length; i++) {
-    searchString += `CONTAINS('${searches[i]}') OR `;
-  }
-  searchString = searchString.substring(0, searchString.length - 4);
-  axios({
-    url: 'https://api.yuuvis.io/dms-core/objects/search',
-    method: 'POST',
-    headers: { 'Ocp-Apim-Subscription-Key': process.env.API_KEY },
-    data: {
-      query: {
-        statement: `SELECT * FROM enaio:object WHERE ${searchString}`,
-      },
-    },
-  })
-    .then((response) => {
-      const promises = response.data.objects.map((entry) => {
-        const objectId = entry.properties['enaio:objectId'].value;
-        const contentType = entry.contentStreams[0].mimeType;
-        const headers = { headers: { 'Ocp-Apim-Subscription-Key': process.env.API_KEY } };
-        if (contentType === 'application/pdf') {
-          return;
-        }
-
-        return axios.get(`https://api.yuuvis.io/dms-core/objects/${objectId}/contents/file`, headers);
-      });
-      Promise.all(promises)
-        .then((results) => {
-          const resumes = results.map((result) => {
-            const resume = result.data;
-            const objectId = result.request.path.split('/')[3];
-            resume.objectId = objectId;
-            return resume;
-          });
-          res.send(resumes);
-        })
-        .catch((err) => {
-          console.log(err);
-          res.send();
-        });
-    })
-    .catch((error) => {
-      console.log('Error: ', error);
-      res.send('');
-    });
-});
-
+app.get('*', (req, res) => res.sendFile(path.resolve('dist', 'index.html')));
 module.exports = app;
