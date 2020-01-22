@@ -1,6 +1,6 @@
 {
   "name": "top5",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Jarrod Miller <jarrod.miller93@gmail.com>",
   "description": "The project was not created for the yuuvis hackathon",
   "main": "index.js",
