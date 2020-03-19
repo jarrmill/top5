@@ -1,5 +1,3 @@
-const HtmlWebpackPlugin = require('html-webpack-plugin');
-const UglifyJsPlugin = require('uglifyjs-webpack-plugin');
 const path = require('path');
 
 module.exports = {
@@ -38,29 +36,5 @@ module.exports = {
   },
   resolve: {
     extensions: ['*', '.js', '.jsx'],
-  },
-  plugins: [
-    new HtmlWebpackPlugin({
-      title: 'Toy Problem Solutions',
-      template: path.join(__dirname, 'templates/index.ejs'),
-      inject: 'body',
-      filename: 'index.html',
-    }),
-  ],
-  optimization: {
-    minimizer: [new UglifyJsPlugin()],
-  },
-  devServer: {
-    contentBase: path.join(__dirname, 'dist'),
-    compress: true,
-    port: 9000,
-    liveReload: true,
-    open: true,
-  },
-  devtool: 'cheap-eval-source-map', // fast build, super fast rebuilds
-  performance: {
-    maxEntrypointSize: 10000,
-    maxAssetSize: 10000,
-    hints: false,
   },
 };

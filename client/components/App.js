@@ -4,7 +4,10 @@ import axios from 'axios';
 import { addDays } from 'date-fns';
 import AddFriend from './AddFriend';
 import FriendsList from './FriendsList';
+import Header from './Header';
 import Data from './Data';
+
+import { Main } from './style/AppStyles';
 
 import {
   BrowserRouter as Router,
@@ -15,6 +18,7 @@ class App extends Component {
   constructor(props) {
     super(props);
     this.state = {
+      isLoading: true,
       userEmail: '',
       friend: {
         name: '',
@@ -26,9 +30,8 @@ class App extends Component {
     this.scales = {
       1: 2,
       2: 7,
-      3: 30
+      3: 30,
     };
-
     this.changeFriend = this.changeFriend.bind(this);
     this.submitFriend = this.submitFriend.bind(this);
     this.updateFriend = this.updateFriend.bind(this);
@@ -50,7 +53,7 @@ class App extends Component {
     axios.get('/api/friends', { headers: { email } })
       .then((results) => {
         const { friends } = results.data;
-        this.setState({ friends }, () => console.log(this.state));
+        this.setState({ friends, isLoading: false }, () => console.log(this.state));
       })
       .catch(error => console.log('Error in fetchFriends', error));
   }
@@ -105,11 +108,10 @@ class App extends Component {
   render() {
     return (
       <Router>
+        <Header />
         <Route path="/home">
-          <div>
-            <a href="/auth/linkedin">Log in</a>
-            <a href="/auth/test">Test</a>
-            <button onClick={this.deleteUser}>DeleteUser</button>
+          <Main>
+            {/* <button onClick={this.deleteUser}>DeleteUser</button> */}
             <AddFriend
               friend={this.state.friend}
               changeFriend={this.changeFriend}
@@ -119,8 +121,9 @@ class App extends Component {
               friends={this.state.friends}
               updateFriend={this.updateFriend}
               deleteFriend={this.deleteFriend}
+              isLoading={this.state.isLoading}
             />
-          </div>
+          </Main>
         </Route>
         <Route path="/data">
           <Data friends={this.state.friends} />
